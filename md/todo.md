@@ -160,6 +160,10 @@
 - [ ] 웹 대시보드 (Flask/FastAPI)
 - [ ] 모바일 앱 알림
 - [ ] 클라우드 동기화
+- [ ] **오디오 장치 점유 문제 해결**
+  - [x] 현재 사용 중인 장치(Current InputStream)는 Probe 대상 제외 (디스코드 끊김 방지)
+  - [ ] Non-intrusive Probing (WASAPI Loopback 모니터링만 수행)
+  - [ ] Voicemeeter API 연동 (더 안정적인 제어)
 - [ ] 화자 분리 (Speaker Diarization)
 - [ ] 실시간 자막 오버레이
 - [ ] 자동 중요 순간 감지

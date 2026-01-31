@@ -22,7 +22,7 @@ class RecordingSettings:
 class StorageSettings:
     """저장소 관련 설정."""
     data_dir: str = "~/voicelink_data"
-    retention_days: int = 7
+    retention_days: int = 30
     auto_cleanup: bool = True
 
     @property

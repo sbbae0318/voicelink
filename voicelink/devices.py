@@ -230,3 +230,23 @@ def print_devices(devices: Optional[list[AudioDevice]] = None) -> None:
     best = find_best_loopback_device()
     if best:
         print(f"\nRecommended for system audio capture: [{best.index}] {best.name}")
+
+
+def find_device_by_name(name_pattern: str) -> Optional[AudioDevice]:
+    """Find a device by name pattern (case-insensitive)."""
+    devices = list_devices()
+    name_lower = name_pattern.lower()
+    
+    # 1. Capture 가능한 장치(입력/루프백) 중에서 검색
+    for device in devices:
+        if not device.can_capture:
+            continue
+        if name_lower in device.name.lower():
+            return device
+            
+    # 2. 정 없으면 전체 장치에서 검색
+    for device in devices:
+        if name_lower in device.name.lower():
+            return device
+            
+    return None

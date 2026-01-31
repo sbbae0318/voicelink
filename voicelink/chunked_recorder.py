@@ -31,6 +31,8 @@ class ChunkedRecorderState:
     total_duration: float = 0.0
     last_chunk_time: Optional[datetime] = None
     consecutive_silence_count: int = 0
+    current_instant_rms: float = 0.0
+    last_sound_time: float = 0.0
 
 
 class ChunkedRecorder:
@@ -55,6 +57,7 @@ class ChunkedRecorder:
         self._audio_buffer: list[np.ndarray] = []
         self._buffer_lock = threading.Lock()
         self._chunk_thread: Optional[threading.Thread] = None
+        self._monitor_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
         self._on_chunk_saved: list[Callable[[AudioChunk], None]] = []
@@ -89,6 +92,12 @@ class ChunkedRecorder:
         """오디오 입력 콜백."""
         if status:
             logger.warning(f"오디오 상태: {status}")
+
+        # 실시간 RMS 계산 및 업데이트
+        rms = np.sqrt(np.mean(indata**2))
+        self.state.current_instant_rms = float(rms)
+        if rms > self.config.recording.silence_threshold:
+            self.state.last_sound_time = time.time()
 
         with self._buffer_lock:
             self._audio_buffer.append(indata.copy())
@@ -259,10 +268,25 @@ class ChunkedRecorder:
         logger.info(f"새 세션 시작: {session.session_id}")
         
         # [초기 유효성 검사] 시작하자마자 첫 청크가 사실상 무음이라면(VAD < 5%) 세션 바로 폐기
-        # 이는 '녹음 시작 후 N초 동안 음성이 없으면 종료' 로직에 해당함
         if first_chunk.speech_ratio < 0.05:
              logger.info(f"세션 취소 (초기 음성 미검출): {first_chunk.speech_ratio*100:.1f}%")
-             self._complete_current_session()  # 저장 후 즉시 종료/삭제됨 (너무 짧아서)
+             
+             # [버그 수정] 세션을 시작하지 않으므로 파일도 삭제해야 함
+             try:
+                 # chunk.file_path는 relative path일 수 있으므로 주의 (절대 경로로 변환 필요)
+                 # _save_chunk에서 relative_path를 저장했으므로, data_dir와 합쳐야 함
+                 full_path = self.config.storage.log_dir.parent / "recordings" / first_chunk.file_path
+                 if not full_path.exists():
+                     # 혹시 경로가 안 맞을 경우를 대비해 config.storage.data_dir 사용
+                     full_path = Path(self.config.storage.data_dir) / first_chunk.file_path
+                 
+                 if full_path.exists():
+                     full_path.unlink()
+                     logger.debug(f"무음 파일 삭제됨: {full_path.name}")
+             except Exception as e:
+                 logger.error(f"무음 파일 삭제 실패: {e}")
+
+             self._complete_current_session() 
              return
 
         for callback in self._on_session_created:
@@ -295,6 +319,37 @@ class ChunkedRecorder:
 
         self.state.current_session = None
         self.state.consecutive_silence_count = 0
+
+    def _chunk_processing_loop(self) -> None:
+        """오디오 데이터를 청크로 처리하는 루프."""
+        logger.info("청크 처리 루프 시작")
+        
+        # ... (기존 코드)
+
+    def _monitor_silence_loop(self) -> None:
+        """백그라운드에서 실시간 침묵을 감시합니다."""
+        logger.info("실시간 침묵 감시 스레드 시작")
+        while not self._stop_event.is_set():
+            time.sleep(1.0)
+            
+            # 녹음 중 아니면 스킵
+            if not self.state.is_recording or self.state.last_sound_time == 0:
+                continue
+                
+            # 무음 지속 시간 계산
+            elapsed = time.time() - self.state.last_sound_time
+            timeout = self.config.device.silence_timeout_for_switch
+            
+            # 타임아웃 초과 & 자동 전환 켜져있으면 스캔 시도
+            if elapsed > timeout and self.config.device.auto_switch:
+                # 마지막 스캔 후 5초 지났는지 체크 (중복 실행 방지)
+                if time.time() - self._last_device_scan_time > 5.0:
+                    logger.debug(f"실시간 무음 감지 ({elapsed:.1f}초) -> 장치 스캔 트리거")
+                    # 메인 스레드 부하 줄이기 위해 비동기로 실행
+                    threading.Thread(target=self._check_alternative_devices, daemon=True).start()
+                    # 중복 실행 방지를 위해 last_sound_time을 조금 미룸
+                    self.state.last_sound_time = time.time() - (timeout / 2)
+
 
     def _chunk_processing_loop(self) -> None:
         """청크 처리 루프 (별도 스레드에서 실행)."""
@@ -333,6 +388,20 @@ class ChunkedRecorder:
             logger.warning("이미 녹음 중입니다.")
             return False
 
+        # [Robustness] 이름 기반 장치 검색
+        # 인덱스가 변경되었을 수 있으므로, preferred_device 이름으로 최신 인덱스를 찾는다.
+        if self.config.device.preferred_device:
+            try:
+                from .devices import find_device_by_name
+                found_device = find_device_by_name(self.config.device.preferred_device)
+                if found_device:
+                    logger.info(f"장치 이름 매칭 성공: '{self.config.device.preferred_device}' -> [{found_device.index}] {found_device.name}")
+                    self.device = found_device.index
+                else:
+                    logger.warning(f"선호 장치를 찾을 수 없음: '{self.config.device.preferred_device}'")
+            except Exception as e:
+                logger.error(f"장치 이름 검색 중 오류: {e}")
+
         # 장치 선택
         device_idx = self.device
         if device_idx is None and self.config.device.auto_detect:
@@ -364,6 +433,10 @@ class ChunkedRecorder:
             daemon=True,
         )
         self._chunk_thread.start()
+        
+        # 실시간 모니터링 스레드 시작
+        self._monitor_thread = threading.Thread(target=self._monitor_silence_loop, daemon=True)
+        self._monitor_thread.start()
 
         self.state.is_recording = True
         logger.info("청크 녹음 시작됨")
@@ -378,6 +451,8 @@ class ChunkedRecorder:
         self._stop_event.set()
         if self._chunk_thread:
             self._chunk_thread.join(timeout=5.0)
+        if self._monitor_thread:
+            self._monitor_thread.join(timeout=2.0)
 
         # 남은 버퍼 저장
         with self._buffer_lock:
@@ -445,6 +520,8 @@ class ChunkedRecorder:
             active_device = find_active_audio_device(
                 probe_duration=0.5,
                 threshold=0.005,  # 약간 높은 임계값
+                exclude_keywords=["microphone", "mic", "마이크", "webcam"],  # 마이크 제외
+                exclude_indices=[current_idx],  # [중요] 현재 사용 중인 장치 제외 (간섭 방지)
                 verbose=False
             )
             

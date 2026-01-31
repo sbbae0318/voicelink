@@ -111,6 +111,7 @@ def find_active_audio_device(
     threshold: float = 0.001,
     prefer_virtual: bool = True,
     exclude_keywords: Optional[list[str]] = None,
+    exclude_indices: Optional[list[int]] = None,
     verbose: bool = True,
 ) -> Optional[AudioDevice]:
     """실제로 오디오 신호가 있는 장치를 자동으로 찾습니다.
@@ -141,6 +142,10 @@ def find_active_audio_device(
                 continue
             filtered.append(d)
         input_devices = filtered
+
+    # 인덱스 기반 제외 (현재 사용 중인 장치 충돌 방지)
+    if exclude_indices:
+        input_devices = [d for d in input_devices if d.index not in exclude_indices]
     
     if verbose:
         print(f"\n🔍 오디오 장치 자동 탐지 시작... ({len(input_devices)}개 장치)")
@@ -229,7 +234,7 @@ def auto_select_capture_device(
         probe_duration=0.3,
         threshold=0.0005,
         prefer_virtual=True,
-        exclude_keywords=["microphone", "mic", "마이크", "webcam"],  # 마이크 제외
+        exclude_keywords=["microphone", "mic", "마이크", "webcam", "voicemeeter out b1"],  # 마이크 및 B1 제외
         verbose=verbose,
     )
     

@@ -50,10 +50,10 @@ class VoiceLinkService:
                 min_session_duration=10,  # 최소 10초 세션
             ),
             device=DeviceSettings(
-                auto_detect=True,
-                auto_switch=True,  # 무음 시 자동 장치 전환
-                silence_timeout_for_switch=5.0,  # 5초 이상 무음이면 스캔
-                preferred_device="Voicemeeter Out B1",  # 가상 장치 선호
+                auto_detect=False,  # 자동 탐지 끄기 (장치 고정)
+                auto_switch=False,  # 자동 전환 끄기 (안정성 우선)
+                silence_timeout_for_switch=5.0,  # (사용 안 함)
+                preferred_device="Voicemeeter Out B2",  # Potato B2 (Aux)
             ),
         )
 
