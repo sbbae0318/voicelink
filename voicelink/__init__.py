@@ -7,6 +7,12 @@ as both a standalone Python program and a Claude Skill.
 from pathlib import Path
 from typing import Callable, Optional, Union
 
+from .auto_detect import (
+    DeviceProbeResult,
+    auto_select_capture_device,
+    find_active_audio_device,
+    probe_device,
+)
 from .capture import AudioCapture, CaptureConfig, capture_audio_sync
 from .devices import (
     AudioDevice,
@@ -17,6 +23,7 @@ from .devices import (
     list_devices,
     list_loopback_devices,
 )
+from .logging_config import get_logger, log, setup_logging
 from .platform_utils import (
     Platform,
     check_blackhole_installed,
@@ -32,6 +39,32 @@ from .virtual_mic import (
     find_virtual_mic_devices,
     get_virtual_mic_setup_instructions,
 )
+
+# Optional imports (require extra dependencies)
+try:
+    from .vad import (
+        VADConfig,
+        extract_voice_segments,
+        is_silent,
+        process_wav_file,
+        remove_silence,
+    )
+    _VAD_AVAILABLE = True
+except ImportError:
+    _VAD_AVAILABLE = False
+
+try:
+    from .whisper import (
+        TranscriptionResult,
+        WhisperConfig,
+        get_optimal_sample_rate,
+        prepare_audio_for_whisper,
+        transcribe_audio,
+        transcribe_directory,
+    )
+    _WHISPER_AVAILABLE = True
+except ImportError:
+    _WHISPER_AVAILABLE = False
 
 __version__ = "0.1.0"
 __all__ = [
@@ -65,7 +98,30 @@ __all__ = [
     "check_virtual_mic_ready",
     "find_virtual_mic_devices",
     "get_virtual_mic_setup_instructions",
+    # Auto Detection
+    "DeviceProbeResult",
+    "find_active_audio_device",
+    "auto_select_capture_device",
+    "probe_device",
+    # Logging
+    "setup_logging",
+    "get_logger",
+    "log",
+    # VAD (Voice Activity Detection)
+    "VADConfig",
+    "is_silent",
+    "extract_voice_segments",
+    "remove_silence",
+    "process_wav_file",
+    # Whisper
+    "WhisperConfig",
+    "TranscriptionResult",
+    "transcribe_audio",
+    "transcribe_directory",
+    "get_optimal_sample_rate",
+    "prepare_audio_for_whisper",
 ]
+
 
 
 class VoiceLink:
@@ -81,15 +137,23 @@ class VoiceLink:
         >>> vl.capture_to_file("output.wav", duration=30)
     """
 
-    def __init__(self, device: Optional[int] = None):
+    def __init__(self, device: Optional[int] = None, auto_detect: bool = False):
         """Initialize VoiceLink.
 
         Args:
             device: Default device index for capture. None for auto-detection.
+            auto_detect: If True, automatically find device with active audio signal.
         """
+        self._auto_detect = auto_detect
         self._default_device = device
         self._capture: Optional[AudioCapture] = None
         self._recorder: Optional[AudioRecorder] = None
+        
+        # 자동 탐지 모드일 경우 활성 장치 찾기
+        if auto_detect and device is None:
+            detected = auto_select_capture_device(verbose=True)
+            if detected:
+                self._default_device = detected.index
 
     @staticmethod
     def list_devices() -> list[AudioDevice]:
@@ -117,6 +181,34 @@ class VoiceLink:
             Best AudioDevice for loopback capture, or None.
         """
         return find_best_loopback_device()
+
+    @staticmethod
+    def find_active_device(verbose: bool = True) -> Optional[AudioDevice]:
+        """Find a device with active audio signal.
+
+        Scans all input devices and returns the one with the highest audio level.
+
+        Args:
+            verbose: Print scanning progress.
+
+        Returns:
+            AudioDevice with active signal, or None.
+        """
+        return find_active_audio_device(verbose=verbose)
+
+    def detect_and_set_device(self, verbose: bool = True) -> Optional[AudioDevice]:
+        """Detect active audio device and set it as default.
+
+        Args:
+            verbose: Print scanning progress.
+
+        Returns:
+            Detected AudioDevice, or None.
+        """
+        device = auto_select_capture_device(verbose=verbose)
+        if device:
+            self._default_device = device.index
+        return device
 
     @staticmethod
     def check_setup() -> dict:

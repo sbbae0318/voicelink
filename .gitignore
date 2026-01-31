@@ -145,3 +145,11 @@ Thumbs.db
 *.m4a
 recordings/
 output/
+
+logs/
+
+test_recordings/
+
+.agents/
+
+.gemini/

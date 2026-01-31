@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceLink Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0f0f1a;
+            --bg-card: #1a1a2e;
+            --bg-hover: #252540;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --border: #2a2a40;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .date-picker {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .date-picker:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .sessions-table {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+        }
+
+        th {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+
+        tr:hover {
+            background: var(--bg-hover);
+        }
+
+        tr:last-child {
+            border-bottom: none;
+        }
+
+        .session-title {
+            font-weight: 500;
+        }
+
+        .session-summary {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-completed {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+        }
+
+        .badge-recording {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .duration {
+            font-family: 'SF Mono', 'Consolas', monospace;
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .health-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .health-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .health-dot.offline {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🎙️</div>
+                <h1>VoiceLink Dashboard</h1>
+            </div>
+            <div class="health-indicator">
+                <div class="health-dot" id="healthDot"></div>
+                <span id="healthStatus">연결 중...</span>
+            </div>
+        </header>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-label">총 세션</div>
+                <div class="stat-value" id="totalSessions">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">녹음 중</div>
+                <div class="stat-value" id="recordingSessions">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">전사 완료</div>
+                <div class="stat-value" id="transcribedSessions">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">디스크 사용량</div>
+                <div class="stat-value" id="diskUsage">-</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="date" class="date-picker" id="datePicker">
+            <button class="btn" onclick="loadSessions()">🔄 새로고침</button>
+        </div>
+
+        <div class="sessions-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>날짜</th>
+                        <th>시간</th>
+                        <th>길이</th>
+                        <th>제목</th>
+                        <th>요약</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionsBody">
+                    <tr>
+                        <td colspan="6">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_BASE}/api/stats`);
+                const data = await res.json();
+                
+                document.getElementById('totalSessions').textContent = data.total_sessions;
+                document.getElementById('recordingSessions').textContent = data.recording_sessions;
+                document.getElementById('transcribedSessions').textContent = data.transcribed_sessions;
+                document.getElementById('diskUsage').textContent = `${data.disk_usage_mb.toFixed(1)} MB`;
+            } catch (e) {
+                console.error('Stats load error:', e);
+            }
+        }
+
+        async function loadSessions() {
+            const tbody = document.getElementById('sessionsBody');
+            tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>';
+
+            try {
+                const date = document.getElementById('datePicker').value;
+                const url = date ? `${API_BASE}/api/sessions?date=${date}` : `${API_BASE}/api/sessions`;
+                
+                const res = await fetch(url);
+                const sessions = await res.json();
+
+                if (sessions.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">📭</div>
+                                    <p>세션이 없습니다</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = sessions.map(s => `
+                    <tr>
+                        <td>${s.date}</td>
+                        <td>${s.start_time}</td>
+                        <td class="duration">${s.duration_formatted}</td>
+                        <td class="session-title">${s.title}</td>
+                        <td class="session-summary" title="${s.summary}">${s.summary || '-'}</td>
+                        <td><span class="badge badge-${s.status}">${s.status}</span></td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Sessions load error:', e);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">⚠️</div>
+                                <p>데이터를 불러올 수 없습니다</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        async function checkHealth() {
+            try {
+                const res = await fetch(`${API_BASE}/api/health`);
+                const data = await res.json();
+                
+                const dot = document.getElementById('healthDot');
+                const status = document.getElementById('healthStatus');
+                
+                if (data.llm_available) {
+                    dot.classList.remove('offline');
+                    status.textContent = 'LLM 연결됨';
+                } else {
+                    dot.classList.add('offline');
+                    status.textContent = 'LLM 오프라인';
+                }
+            } catch (e) {
+                document.getElementById('healthDot').classList.add('offline');
+                document.getElementById('healthStatus').textContent = '연결 실패';
+            }
+        }
+
+        // 초기 로드
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadSessions();
+            checkHealth();
+
+            // 자동 새로고침 (30초마다)
+            setInterval(() => {
+                loadStats();
+                loadSessions();
+            }, 30000);
+        });
+
+        // 날짜 변경 시 자동 로드
+        document.getElementById('datePicker').addEventListener('change', loadSessions);
+    </script>
+</body>
+</html>

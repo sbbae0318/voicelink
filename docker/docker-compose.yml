@@ -1,0 +1,53 @@
+services:
+  # 1. Ollama LLM 서버 (GPU 가속)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: voicelink-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 2. 웹 대시보드 (FastAPI + 프론트엔드)
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: voicelink-web
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../recordings:/app/data
+      - ../voicelink:/app/voicelink
+      - ../web:/app/web
+    environment:
+      - VOICELINK_DATA_DIR=/app/data
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+# VoiceLink 녹음 서비스는 호스트에서 실행해야 합니다.
+# Windows에서 오디오 장치 접근이 필요하므로 Docker 컨테이너에서 실행 불가.
+#
+# 호스트에서 실행 방법:
+#   1. 직접 실행: python voicelink_service.py
+#   2. 배치 파일: start_voicelink.bat
+#   3. PowerShell: .\Start-VoiceLink.ps1
+#   4. Windows 시작 시 자동 실행: setup_autostart.ps1 실행
+
+volumes:
+  ollama_data:
